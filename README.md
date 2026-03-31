@@ -52,7 +52,7 @@ Le fichier `data/books.csv` est créé (ou mis à jour) à la fin de l'exécutio
 
 ## Schéma du pipeline
 
-Le schéma du pipeline est disponible dans [`docs/pipeline_schema.html`](docs/pipeline_schema.html).
+Le schéma du pipeline est disponible dans [`docs/pipeline_schema.pdf`](docs/pipeline_schema.pdf).
 
 ## Ouvrir le CSV dans Excel
 
