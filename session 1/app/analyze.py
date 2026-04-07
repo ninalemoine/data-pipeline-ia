@@ -7,16 +7,34 @@ OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "analyze.csv
 
 
 def analyze():
+    if not os.path.exists(INPUT_FILE):
+        print("ERROR - books.csv introuvable, analyze() annulée")
+        return
+
     books = []
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             books.append(row)
 
-    prices = [float(b["price"]) for b in books if b["price"]]
-    ratings = [int(b["rating"]) for b in books if b["rating"]]
-    categories = Counter(b["category"] for b in books if b["category"])
-    scraping_dates = sorted(set(b["scraping_date"] for b in books if b["scraping_date"]))
+    prices = []
+    for b in books:
+        try:
+            if b.get("price"):
+                prices.append(float(b["price"]))
+        except ValueError:
+            print(f"WARN - Prix ignoré (valeur invalide) : '{b.get('price')}'")
+
+    ratings = []
+    for b in books:
+        try:
+            if b.get("rating"):
+                ratings.append(int(b["rating"]))
+        except ValueError:
+            print(f"WARN - Note ignorée (valeur invalide) : '{b.get('rating')}'")
+
+    categories = Counter(b["category"] for b in books if b.get("category"))
+    scraping_dates = sorted(set(b["scraping_date"] for b in books if b.get("scraping_date")))
 
     stats = [
         {"métrique": "total_livres", "valeur": len(books)},

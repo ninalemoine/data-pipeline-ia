@@ -1,7 +1,24 @@
+import time
 import requests
 from bs4 import BeautifulSoup
 
 RATINGS = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}
+REQUEST_TIMEOUT = 10
+RETRY_COUNT = 3
+RATE_LIMIT_DELAY = 0.5  # secondes entre chaque requête
+
+
+def _get(url: str) -> requests.Response | None:
+    """Requête HTTP avec timeout et retry automatique."""
+    for attempt in range(RETRY_COUNT):
+        try:
+            response = requests.get(url, timeout=REQUEST_TIMEOUT)
+            return response
+        except requests.RequestException as e:
+            print(f"WARN - Tentative {attempt + 1}/{RETRY_COUNT} échouée pour {url} : {e}")
+            time.sleep(1)
+    print(f"ERROR - Impossible de contacter {url} après {RETRY_COUNT} tentatives")
+    return None
 
 
 def get_all_page_links(total_pages: int) -> list:
@@ -14,33 +31,32 @@ def get_all_page_links(total_pages: int) -> list:
 
 def get_book_links_from(page_link: str) -> list:
     domain = "https://books.toscrape.com/catalogue/"
-    try:
-        response = requests.get(page_link)
-    except Exception as e:
-        print(f"ERROR - Impossible de contacter la page : {e}")
+    response = _get(page_link)
+    if response is None:
         return []
 
     links = []
     if response.status_code != 200:
-        print(f"ERROR - Status code: {response.status_code}")
+        print(f"ERROR - Status code {response.status_code} pour {page_link}")
     else:
         soup = BeautifulSoup(response.text, "html.parser")
         all_tag_div = soup.find_all("div", class_="image_container")
         for tag_div in all_tag_div:
-            link = domain + tag_div.find("a").get("href")
-            links.append(link)
+            a_tag = tag_div.find("a")
+            if a_tag and a_tag.get("href"):
+                links.append(domain + a_tag["href"])
+
+    time.sleep(RATE_LIMIT_DELAY)
     return links
 
 
 def get_book_infos_from(book_link: str) -> dict:
-    try:
-        response = requests.get(book_link)
-    except Exception as e:
-        print(f"ERROR - Impossible de contacter le livre : {e}")
+    response = _get(book_link)
+    if response is None:
         return {}
 
     if response.status_code != 200:
-        print(f"ERROR - Status code: {response.status_code}")
+        print(f"ERROR - Status code {response.status_code} pour {book_link}")
         return {}
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -55,6 +71,7 @@ def get_book_infos_from(book_link: str) -> dict:
         print(f"ERROR - Donnée mal formée sur {book_link} : {e}")
         return {}
 
+    time.sleep(RATE_LIMIT_DELAY)
     return {
         "title": title,
         "price": price,

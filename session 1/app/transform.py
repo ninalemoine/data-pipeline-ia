@@ -13,9 +13,9 @@ def clean_books(books: list) -> list:
         if not book:
             continue
         cleaned.append({
-            "title": book["title"],
-            "price": clean_price(book["price"]),
-            "rating": book["rating"],
-            "category": book["category"],
+            "title": book.get("title", ""),
+            "price": clean_price(book.get("price", "0")),
+            "rating": book.get("rating", 0),
+            "category": book.get("category", "Unknown"),
         })
     return cleaned

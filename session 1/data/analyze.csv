@@ -1,0 +1,24 @@
+métrique,valeur
+total_livres,1999
+nb_scrappings,2
+dernier_scrapping,2026-03-31 14:30:24
+prix_moyen,35.06
+prix_min,10.0
+prix_max,59.99
+note_moyenne,2.92
+nb_categories,50
+livres_note_1,452
+livres_note_2,392
+livres_note_3,406
+livres_note_4,358
+livres_note_5,391
+top_cat_Default,304
+top_cat_Nonfiction,220
+top_cat_Sequential Art,150
+top_cat_Add a comment,134
+top_cat_Fiction,130
+top_cat_Young Adult,108
+top_cat_Fantasy,95
+top_cat_Romance,70
+top_cat_Mystery,64
+top_cat_Food and Drink,60
