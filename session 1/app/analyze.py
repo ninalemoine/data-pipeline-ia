@@ -1,14 +1,19 @@
 import csv
 import os
 from collections import Counter
+from logger import get_logger
 
-INPUT_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "books.csv")
-OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "analyze.csv")
+logger = get_logger(__name__)
+
+_default_data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+DATA_DIR = os.environ.get("DATA_DIR", _default_data_dir)
+INPUT_FILE = os.path.join(DATA_DIR, "books.csv")
+OUTPUT_FILE = os.path.join(DATA_DIR, "analyze.csv")
 
 
 def analyze():
     if not os.path.exists(INPUT_FILE):
-        print("ERROR - books.csv introuvable, analyze() annulée")
+        logger.error("books.csv introuvable — analyze() annulée")
         return
 
     books = []
@@ -17,13 +22,15 @@ def analyze():
         for row in reader:
             books.append(row)
 
+    logger.info(f"{len(books)} lignes chargées depuis books.csv")
+
     prices = []
     for b in books:
         try:
             if b.get("price"):
                 prices.append(float(b["price"]))
         except ValueError:
-            print(f"WARN - Prix ignoré (valeur invalide) : '{b.get('price')}'")
+            logger.warning(f"Prix ignoré (valeur invalide) : '{b.get('price')}'")
 
     ratings = []
     for b in books:
@@ -31,7 +38,7 @@ def analyze():
             if b.get("rating"):
                 ratings.append(int(b["rating"]))
         except ValueError:
-            print(f"WARN - Note ignorée (valeur invalide) : '{b.get('rating')}'")
+            logger.warning(f"Note ignorée (valeur invalide) : '{b.get('rating')}'")
 
     categories = Counter(b["category"] for b in books if b.get("category"))
     scraping_dates = sorted(set(b["scraping_date"] for b in books if b.get("scraping_date")))
@@ -48,18 +55,19 @@ def analyze():
     ]
 
     for note in range(1, 6):
-        nb = sum(1 for r in ratings if r == note)
-        stats.append({"métrique": f"livres_note_{note}", "valeur": nb})
+        stats.append({"métrique": f"livres_note_{note}", "valeur": sum(1 for r in ratings if r == note)})
 
     for cat, count in categories.most_common(10):
         stats.append({"métrique": f"top_cat_{cat}", "valeur": count})
 
-    with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["métrique", "valeur"])
-        writer.writeheader()
-        writer.writerows(stats)
-
-    print(f"Analyse exportée dans data/analyze.csv ({len(stats)} métriques)")
+    try:
+        with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["métrique", "valeur"])
+            writer.writeheader()
+            writer.writerows(stats)
+        logger.info(f"Analyse exportée dans analyze.csv ({len(stats)} métriques)")
+    except IOError as e:
+        logger.error(f"Impossible d'écrire analyze.csv : {e}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,10 @@
 services:
   python-app:
     build: .
+    environment:
+      - DATA_DIR=/app/data
+      - LOG_DIR=/app/logs
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
     container_name: python-app

@@ -2,7 +2,7 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y cron && mkdir -p /app/data
+RUN apt-get update && apt-get install -y cron && mkdir -p /app/data && mkdir -p /app/logs
 
 COPY app/ /app/
 COPY crontab.sh /etc/cron.d/data-pipeline-cron

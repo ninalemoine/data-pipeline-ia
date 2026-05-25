@@ -1,31 +1,46 @@
+import os
 import time
 import requests
 from bs4 import BeautifulSoup
+from logger import get_logger
+from chaos import maybe_raise_network_error, maybe_drop_field, maybe_raise_http_429
+
+logger = get_logger(__name__)
 
 RATINGS = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}
 REQUEST_TIMEOUT = 10
 RETRY_COUNT = 3
-RATE_LIMIT_DELAY = 0.5  # secondes entre chaque requête
+RATE_LIMIT_DELAY = 0.2
+HTTP_429_BACKOFF = int(os.environ.get("HTTP_429_BACKOFF", "60"))  # configurable pour les tests
 
 
-def _get(url: str) -> requests.Response | None:
-    """Requête HTTP avec timeout et retry automatique."""
+def _get(url: str) -> requests.Response:
+    """Requête HTTP avec timeout, retry automatique et gestion HTTP 429."""
     for attempt in range(RETRY_COUNT):
         try:
+            maybe_raise_network_error(url)
             response = requests.get(url, timeout=REQUEST_TIMEOUT)
+
+            # Rate limit : on attend avant de réessayer
+            if response.status_code == 429 or maybe_raise_http_429():
+                logger.warning(f"HTTP 429 reçu — pause de {HTTP_429_BACKOFF}s avant retry")
+                time.sleep(HTTP_429_BACKOFF)
+                continue
+
             return response
+
         except requests.RequestException as e:
-            print(f"WARN - Tentative {attempt + 1}/{RETRY_COUNT} échouée pour {url} : {e}")
+            logger.warning(f"Tentative {attempt + 1}/{RETRY_COUNT} échouée pour {url} : {e}")
             time.sleep(1)
-    print(f"ERROR - Impossible de contacter {url} après {RETRY_COUNT} tentatives")
+
+    logger.error(f"Abandon après {RETRY_COUNT} tentatives : {url}")
     return None
 
 
 def get_all_page_links(total_pages: int) -> list:
-    urls = []
-    for page in range(1, total_pages + 1):
-        url = f"https://books.toscrape.com/catalogue/page-{page}.html"
-        urls.append(url)
+    urls = [f"https://books.toscrape.com/catalogue/page-{page}.html"
+            for page in range(1, total_pages + 1)]
+    logger.info(f"{total_pages} pages à scraper générées")
     return urls
 
 
@@ -37,7 +52,7 @@ def get_book_links_from(page_link: str) -> list:
 
     links = []
     if response.status_code != 200:
-        print(f"ERROR - Status code {response.status_code} pour {page_link}")
+        logger.error(f"Status code {response.status_code} pour {page_link}")
     else:
         soup = BeautifulSoup(response.text, "html.parser")
         all_tag_div = soup.find_all("div", class_="image_container")
@@ -56,25 +71,34 @@ def get_book_infos_from(book_link: str) -> dict:
         return {}
 
     if response.status_code != 200:
-        print(f"ERROR - Status code {response.status_code} pour {book_link}")
+        logger.error(f"Status code {response.status_code} pour {book_link}")
         return {}
 
     soup = BeautifulSoup(response.text, "html.parser")
 
     try:
-        title = soup.find("h1").text
-        price = soup.find("p", class_="price_color").text.strip()
-        rating_word = soup.find("p", class_="star-rating")["class"][1]
-        rating = RATINGS.get(rating_word, 0)
-        category = soup.find("ul", class_="breadcrumb").find_all("li")[2].text.strip()
-    except (AttributeError, IndexError, TypeError) as e:
-        print(f"ERROR - Donnée mal formée sur {book_link} : {e}")
+        # maybe_drop_field() simule un élément HTML manquant
+        h1 = None if maybe_drop_field() else soup.find("h1")
+        title = h1.text if h1 else None
+
+        price_tag = soup.find("p", class_="price_color")
+        price = price_tag.text.strip() if price_tag else None
+
+        rating_tag = soup.find("p", class_="star-rating")
+        rating_word = rating_tag["class"][1] if rating_tag else None
+        rating = RATINGS.get(rating_word, 0) if rating_word else 0
+
+        breadcrumb = soup.find("ul", class_="breadcrumb")
+        items = breadcrumb.find_all("li") if breadcrumb else []
+        category = items[2].text.strip() if len(items) > 2 else None
+
+        if not all([title, price, category]):
+            logger.warning(f"Données incomplètes sur {book_link} — livre ignoré")
+            return {}
+
+    except (AttributeError, IndexError, TypeError, KeyError) as e:
+        logger.error(f"Erreur de parsing sur {book_link} : {e}")
         return {}
 
     time.sleep(RATE_LIMIT_DELAY)
-    return {
-        "title": title,
-        "price": price,
-        "rating": rating,
-        "category": category,
-    }
+    return {"title": title, "price": price, "rating": rating, "category": category}
